@@ -19,7 +19,7 @@ def create_dummy_image(path, width=100, height=100):
 def test_parse_image_list(runner):
     """Tests the parse_image_list function."""
     image_list_path = runner / "image_list.txt"
-    
+
     # Test with a valid file
     with open(image_list_path, 'w') as f:
         f.write("img1.jpg\nimg2.png\n")
@@ -51,15 +51,15 @@ def test_group_images_by_resolution(runner):
     img1 = runner / "img1.jpg"
     img2 = runner / "img2.jpg"
     img3 = runner / "img3.png"
-    
+
     create_dummy_image(img1, 100, 100)
     create_dummy_image(img2, 200, 200)
     create_dummy_image(img3, 100, 100)
 
     image_paths = [str(img1), str(img2), str(img3), "non_existent.jpg"]
-    
+
     groups = w.group_images_by_resolution(image_paths)
-    
+
     assert "100x100" in groups
     assert "200x200" in groups
     assert groups["100x100"] == [str(img1), str(img3)]
@@ -71,7 +71,7 @@ def test_generate_clip(mock_run, runner):
     img_path = runner / "test.jpg"
     create_dummy_image(img_path, 100, 100)
     output_path = runner / "clip.mp4"
-    
+
     # Test with padding
     w.generate_clip(str(img_path), str(output_path), "200x200", 3.0, 0.5)
     mock_run.assert_called_once()
@@ -92,9 +92,9 @@ def test_create_video_from_clips(mock_run, mock_remove, runner):
     """Tests the create_video_from_clips function."""
     clips = [str(runner / "clip1.mp4"), str(runner / "clip2.mp4")]
     output_path = runner / "video.mp4"
-    
+
     w.create_video_from_clips(clips, str(output_path))
-    
+
     mock_run.assert_called_once()
     # Check that the temp file is removed
     mock_remove.assert_called_once_with("temp_clip_list.txt")
@@ -105,9 +105,9 @@ def test_process_group(mock_create_video, mock_generate_clip, runner):
     """Tests the process_group function."""
     images = [str(runner / "img1.jpg"), str(runner / "img2.jpg")]
     output_dir = runner / "output"
-    
+
     w.process_group("100x100", images, str(output_dir), 3.0, 0.5)
-    
+
     assert mock_generate_clip.call_count == 2
     mock_create_video.assert_called_once()
 
@@ -115,14 +115,14 @@ def test_create_parser():
     """Tests the create_parser function."""
     subparser = ArgumentParser().add_subparsers()
     parser = w.create_parser(subparser)
-    
+
     args = parser.parse_args([
         "my_images.txt",
         "--output_dir", "my_slideshows",
         "--duration", "5.0",
         "--fade", "1.0"
     ])
-    
+
     assert args.image_list == "my_images.txt"
     assert args.output_dir == "my_slideshows"
     assert args.duration == 5.0
@@ -140,9 +140,9 @@ def test_viztoolz_plugin_run(mock_parse, mock_group, mock_process, runner):
     args.image_list = "images.txt"
     args.duration = 3.0
     args.fade = 0.5
-    
+
     plugin.run(args)
-    
+
     mock_parse.assert_called_once_with("images.txt")
     mock_group.assert_called_once_with(["img1.jpg"])
     mock_process.assert_called_once_with("100x100", ["img1.jpg"], str(output_dir), 3.0, 0.5)
@@ -154,8 +154,8 @@ def test_register_commands():
     subparser = MagicMock()
     parser = MagicMock()
     subparser.add_parser.return_value = parser
-    
+
     plugin.register_commands(subparser)
-    
-    subparser.add_parser.assert_called_once_with("slideshow", description=plugin.__doc__)
+
+    subparser.add_parser.assert_called_once_with("slideshow", description=plugin.__doc__.strip())
     parser.set_defaults.assert_called_once_with(func=plugin.run)

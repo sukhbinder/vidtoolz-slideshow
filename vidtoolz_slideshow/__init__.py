@@ -128,9 +128,13 @@ class ViztoolzPlugin:
         # add actual call here
         os.makedirs(args.output_dir, exist_ok=True)
         folderpath = os.path.dirname(args.image_list)
-        cwd = os.getcwd()
-        os.chdir(folderpath)
-        images = parse_image_list(args.image_list)
+        if folderpath:
+            cwd = os.getcwd()
+            os.chdir(folderpath)
+        else:
+            cwd = None
+
+        images = parse_image_list(os.path.basename(args.image_list))
         grouped = group_images_by_resolution(images)
 
         # Save groups to JSON (optional metadata)
@@ -140,7 +144,8 @@ class ViztoolzPlugin:
         for resolution, imgs in grouped.items():
             print(f"Processing group: {resolution} with {len(imgs)} image(s)")
             process_group(resolution, imgs, args.output_dir, args.duration, args.fade)
-        os.chdir(cwd)
+        if cwd:
+            os.chdir(cwd)
     def hello(self, args):
         # this routine will be called when "vidtoolz "slideshow is called."
         print("Hello! This is an example ``vidtoolz`` plugin.")
