@@ -1,0 +1,29 @@
+[project]
+name = "vidtoolz-slideshow"
+version = "0.1.0"
+description = "Create slideshow with images using ffmpeg"
+readme = "README.md"
+authors = [{ name = "Sukhbinder Singh" }]
+license = { text = "Apache-2.0" }
+classifiers = ["License :: OSI Approved :: Apache Software License"]
+dependencies = ["vidtoolz", "pillow"]
+
+[project.urls]
+Homepage = "https://github.com/sukhbinder/vidtoolz-slideshow"
+Changelog = "https://github.com/sukhbinder/vidtoolz-slideshow/releases"
+Issues = "https://github.com/sukhbinder/vidtoolz-slideshow/issues"
+CI = "https://github.com/sukhbinder/vidtoolz-slideshow/actions"
+
+[project.entry-points."vidtoolz_plugins"]
+slideshow = "vidtoolz_slideshow:slideshow_plugin"
+
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
