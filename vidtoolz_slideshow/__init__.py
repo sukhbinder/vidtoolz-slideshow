@@ -126,7 +126,7 @@ class ViztoolzPlugin:
 
     def run(self, args):
         # add actual call here
-        os.makedirs(args.output_dir, exist_ok=True)
+
         folderpath = os.path.dirname(args.image_list)
         if folderpath:
             cwd = os.getcwd()
@@ -134,6 +134,7 @@ class ViztoolzPlugin:
         else:
             cwd = None
 
+        os.makedirs(args.output_dir, exist_ok=True)
         images = parse_image_list(os.path.basename(args.image_list))
         grouped = group_images_by_resolution(images)
 
