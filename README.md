@@ -22,9 +22,15 @@ vidtoolz install vidtoolz-slideshow
 ```
 ## Usage
 
-type ``vid slideshow --help`` to get help
+type `vidtoolz slideshow --help` to get help
 
+### Zoom Effect
 
+You can add a slow zoom-in effect to each image in the slideshow by using the `--zoom` or `-z` flag:
+
+```bash
+vidtoolz slideshow my_images.txt --zoom
+```
 
 ## Development
 

@@ -4,16 +4,20 @@ import subprocess
 import json
 from PIL import Image
 
+
 def parse_image_list(file_path):
-    with open(file_path, 'r') as f:
+    with open(file_path, "r") as f:
         return [line.strip() for line in f if line.strip()]
+
 
 def get_image_size(image_path):
     with Image.open(image_path) as img:
         return img.width, img.height
 
+
 def make_even(x):
     return x if x % 2 == 0 else x + 1
+
 
 def group_images_by_resolution(image_paths):
     groups = {}
@@ -28,70 +32,116 @@ def group_images_by_resolution(image_paths):
             print(f"Failed to read image size: {img_path} — {e}")
     return groups
 
-def generate_clip(image_path, output_path, resolution, duration, fade_duration, skip_padding=False):
+
+def generate_clip(
+    image_path,
+    output_path,
+    resolution,
+    duration,
+    fade_duration,
+    skip_padding=False,
+    zoom=False,
+):
     target_width, target_height = map(int, resolution.split("x"))
 
     fade_in = fade_duration
     fade_out = fade_duration
     fade_out_start = duration - fade_out
+    zoom_time = duration - fade_duration
+
+    filters = []
 
     if skip_padding:
-        filter_str = (
-            f"format=yuv420p,"
-            f"fade=t=in:st=0:d={fade_in},"
-            f"fade=t=out:st={fade_out_start}:d={fade_out},"
-            f"scale=trunc(iw/2)*2:trunc(ih/2)*2,"
-            f"fps=30"
-        )
+        filters.append("scale=trunc(iw/2)*2:trunc(ih/2)*2")
     else:
         img_width, img_height = get_image_size(image_path)
         canvas_width = make_even(max(target_width, img_width))
         canvas_height = make_even(max(target_height, img_height))
 
-        filter_str = (
-            f"scale=w={canvas_width}:h={canvas_height}:force_original_aspect_ratio=decrease,"
-            f"pad={canvas_width}:{canvas_height}:(ow-iw)/2:(oh-ih)/2:color=black,"
-            f"scale=trunc(iw/2)*2:trunc(ih/2)*2,"
-            f"format=yuv420p,"
-            f"fade=t=in:st=0:d={fade_in},"
-            f"fade=t=out:st={fade_out_start}:d={fade_out},"
-            f"fps=30"
+        filters.extend(
+            [
+                f"scale=w={canvas_width}:h={canvas_height}:force_original_aspect_ratio=decrease",
+                f"pad={canvas_width}:{canvas_height}:(ow-iw)/2:(oh-ih)/2:color=black",
+            ]
         )
 
+    if zoom:
+        # zoom from 1.0 -> 1.22 (equivalent to 0.9 -> 1.1 visual zoom)
+        filters.append(
+            f"scale="
+            f"w='iw*(1+0.22*min(t/{zoom_time},1))':"
+            f"h='ih*(1+0.22*min(t/{zoom_time},1))':"
+            f"eval=frame"
+        )
+
+        filters.append(
+            f"crop="
+            f"{target_width}:{target_height}:"
+            f"(iw-{target_width})/2:"
+            f"(ih-{target_height})/2"
+        )
+
+    filters.extend(
+        [
+            "format=yuv420p",
+            f"fade=t=in:st=0:d={fade_in}",
+            f"fade=t=out:st={fade_out_start}:d={fade_out}",
+            "fps=30",
+        ]
+    )
+
+    filter_str = ",".join(filters)
+
     cmd = [
-        "ffmpeg", "-y",
-        "-loop", "1",
-        "-t", str(duration),
-        "-i", image_path,
-        "-vf", filter_str,
-        "-c:v", "libx264",
-        "-pix_fmt", "yuv420p",
-        "-r", "30",
-        output_path
+        "ffmpeg",
+        "-y",
+        "-loop",
+        "1",
+        "-t",
+        str(duration),
+        "-i",
+        image_path,
+        "-vf",
+        filter_str,
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-r",
+        "30",
+        output_path,
     ]
 
     subprocess.run(cmd, check=True)
 
+
 def create_video_from_clips(clips, output_path):
     list_file = "temp_clip_list.txt"
-    with open(list_file, 'w') as f:
+    with open(list_file, "w") as f:
         for clip in clips:
             f.write(f"file '{os.path.abspath(clip)}'\n")
 
     cmd = [
-        "ffmpeg", "-y",
-        "-f", "concat",
-        "-safe", "0",
-        "-i", list_file,
-        "-c:v", "libx264",
-        "-pix_fmt", "yuv420p",
-        output_path
+        "ffmpeg",
+        "-y",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        list_file,
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        output_path,
     ]
 
     subprocess.run(cmd, check=True)
     os.remove(list_file)
 
-def process_group(resolution, images, output_dir, duration, fade):
+
+def process_group(resolution, images, output_dir, duration, fade, zoom):
     temp_dir = os.path.join(output_dir, "temp_clips")
     os.makedirs(temp_dir, exist_ok=True)
     output_video = os.path.join(output_dir, f"{resolution}.mp4")
@@ -100,23 +150,41 @@ def process_group(resolution, images, output_dir, duration, fade):
     for idx, image in enumerate(images):
         clip_path = os.path.join(temp_dir, f"clip_{idx:03d}.mp4")
         skip_padding = len(images) == 1
-        generate_clip(image, clip_path, resolution, duration, fade, skip_padding)
+        generate_clip(image, clip_path, resolution, duration, fade, skip_padding, zoom)
         clips.append(clip_path)
 
     create_video_from_clips(clips, output_video)
 
+
 def create_parser(subparser):
-    parser = subparser.add_parser("slideshow", description="Create slideshow with images using ffmpeg")
+    parser = subparser.add_parser(
+        "slideshow", description="Create slideshow with images using ffmpeg"
+    )
     # Add subprser arguments here.
-    parser.add_argument("image_list", help="Path to text file containing list of image paths (ordered)")
-    parser.add_argument("-o","--output_dir", default="slideshows", help="Directory to save slideshows")
-    parser.add_argument("-d","--duration", type=float, default=3.0, help="Duration per image (seconds)")
-    parser.add_argument("-f","--fade", type=float, default=0.5, help="Fade in/out duration (seconds)")
+    parser.add_argument(
+        "image_list",
+        help="Path to text file containing list of image paths (ordered)",
+    )
+    parser.add_argument(
+        "-o", "--output_dir", default="slideshows", help="Directory to save slideshows"
+    )
+    parser.add_argument(
+        "-d",
+        "--duration",
+        type=float,
+        default=3.0,
+        help="Duration per image (seconds)",
+    )
+    parser.add_argument(
+        "-f", "--fade", type=float, default=0.5, help="Fade in/out duration (seconds)"
+    )
+    parser.add_argument("-z", "--zoom", action="store_true", help="Enable zoom effect")
     return parser
 
 
 class ViztoolzPlugin:
-    """ Create slideshow with images using ffmpeg """
+    """Create slideshow with images using ffmpeg"""
+
     __name__ = "slideshow"
 
     @vidtoolz.hookimpl
@@ -144,11 +212,15 @@ class ViztoolzPlugin:
 
         for resolution, imgs in grouped.items():
             print(f"Processing group: {resolution} with {len(imgs)} image(s)")
-            process_group(resolution, imgs, args.output_dir, args.duration, args.fade)
+            process_group(
+                resolution, imgs, args.output_dir, args.duration, args.fade, args.zoom
+            )
         if cwd:
             os.chdir(cwd)
+
     def hello(self, args):
         # this routine will be called when "vidtoolz "slideshow is called."
         print("Hello! This is an example ``vidtoolz`` plugin.")
+
 
 slideshow_plugin = ViztoolzPlugin()

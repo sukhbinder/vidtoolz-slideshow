@@ -3,37 +3,43 @@ from unittest.mock import MagicMock, patch, call
 from argparse import ArgumentParser
 import os
 from PIL import Image
-
+from pathlib import Path
 import vidtoolz_slideshow as w
+
+IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
+
 
 @pytest.fixture
 def runner(tmp_path):
     """Provides a temporary directory for test artifacts."""
     return tmp_path
 
+
 def create_dummy_image(path, width=100, height=100):
     """Creates a dummy image file."""
-    img = Image.new('RGB', (width, height), color = 'red')
+    img = Image.new("RGB", (width, height), color="red")
     img.save(path)
+
 
 def test_parse_image_list(runner):
     """Tests the parse_image_list function."""
     image_list_path = runner / "image_list.txt"
 
     # Test with a valid file
-    with open(image_list_path, 'w') as f:
+    with open(image_list_path, "w") as f:
         f.write("img1.jpg\nimg2.png\n")
     assert w.parse_image_list(image_list_path) == ["img1.jpg", "img2.png"]
 
     # Test with a file with empty lines
-    with open(image_list_path, 'w') as f:
+    with open(image_list_path, "w") as f:
         f.write("img1.jpg\n\nimg2.png\n")
     assert w.parse_image_list(image_list_path) == ["img1.jpg", "img2.png"]
 
     # Test with an empty file
-    with open(image_list_path, 'w') as f:
+    with open(image_list_path, "w") as f:
         f.write("")
     assert w.parse_image_list(image_list_path) == []
+
 
 def test_get_image_size(runner):
     """Tests the get_image_size function."""
@@ -41,10 +47,12 @@ def test_get_image_size(runner):
     create_dummy_image(img_path, 150, 200)
     assert w.get_image_size(img_path) == (150, 200)
 
+
 def test_make_even():
     """Tests the make_even function."""
     assert w.make_even(10) == 10
     assert w.make_even(11) == 12
+
 
 def test_group_images_by_resolution(runner):
     """Tests the group_images_by_resolution function."""
@@ -65,7 +73,8 @@ def test_group_images_by_resolution(runner):
     assert groups["100x100"] == [str(img1), str(img3)]
     assert groups["200x200"] == [str(img2)]
 
-@patch('subprocess.run')
+
+@patch("subprocess.run")
 def test_generate_clip(mock_run, runner):
     """Tests the generate_clip function."""
     img_path = runner / "test.jpg"
@@ -81,13 +90,16 @@ def test_generate_clip(mock_run, runner):
     mock_run.reset_mock()
 
     # Test with skip_padding
-    w.generate_clip(str(img_path), str(output_path), "100x100", 3.0, 0.5, skip_padding=True)
+    w.generate_clip(
+        str(img_path), str(output_path), "100x100", 3.0, 0.5, skip_padding=True
+    )
     mock_run.assert_called_once()
     args, kwargs = mock_run.call_args
     assert "pad" not in args[0][9]
 
-@patch('os.remove')
-@patch('subprocess.run')
+
+@patch("os.remove")
+@patch("subprocess.run")
 def test_create_video_from_clips(mock_run, mock_remove, runner):
     """Tests the create_video_from_clips function."""
     clips = [str(runner / "clip1.mp4"), str(runner / "clip2.mp4")]
@@ -99,38 +111,51 @@ def test_create_video_from_clips(mock_run, mock_remove, runner):
     # Check that the temp file is removed
     mock_remove.assert_called_once_with("temp_clip_list.txt")
 
-@patch('vidtoolz_slideshow.generate_clip')
-@patch('vidtoolz_slideshow.create_video_from_clips')
+
+@patch("vidtoolz_slideshow.generate_clip")
+@patch("vidtoolz_slideshow.create_video_from_clips")
 def test_process_group(mock_create_video, mock_generate_clip, runner):
     """Tests the process_group function."""
     images = [str(runner / "img1.jpg"), str(runner / "img2.jpg")]
     output_dir = runner / "output"
 
-    w.process_group("100x100", images, str(output_dir), 3.0, 0.5)
+    w.process_group("100x100", images, str(output_dir), 3.0, 0.5, False)
 
     assert mock_generate_clip.call_count == 2
     mock_create_video.assert_called_once()
+
 
 def test_create_parser():
     """Tests the create_parser function."""
     subparser = ArgumentParser().add_subparsers()
     parser = w.create_parser(subparser)
 
-    args = parser.parse_args([
-        "my_images.txt",
-        "--output_dir", "my_slideshows",
-        "--duration", "5.0",
-        "--fade", "1.0"
-    ])
+    args = parser.parse_args(
+        [
+            "my_images.txt",
+            "--output_dir",
+            "my_slideshows",
+            "--duration",
+            "5.0",
+            "--fade",
+            "1.0",
+            "--zoom",
+        ]
+    )
 
     assert args.image_list == "my_images.txt"
     assert args.output_dir == "my_slideshows"
     assert args.duration == 5.0
     assert args.fade == 1.0
+    assert args.zoom is True
 
-@patch('vidtoolz_slideshow.process_group')
-@patch('vidtoolz_slideshow.group_images_by_resolution', return_value={"100x100": ["img1.jpg"]})
-@patch('vidtoolz_slideshow.parse_image_list', return_value=["img1.jpg"])
+
+@patch("vidtoolz_slideshow.process_group")
+@patch(
+    "vidtoolz_slideshow.group_images_by_resolution",
+    return_value={"100x100": ["img1.jpg"]},
+)
+@patch("vidtoolz_slideshow.parse_image_list", return_value=["img1.jpg"])
 def test_viztoolz_plugin_run(mock_parse, mock_group, mock_process, runner):
     """Tests the run method of the ViztoolzPlugin."""
     plugin = w.ViztoolzPlugin()
@@ -140,13 +165,17 @@ def test_viztoolz_plugin_run(mock_parse, mock_group, mock_process, runner):
     args.image_list = "images.txt"
     args.duration = 3.0
     args.fade = 0.5
+    args.zoom = True
 
     plugin.run(args)
 
     mock_parse.assert_called_once_with("images.txt")
     mock_group.assert_called_once_with(["img1.jpg"])
-    mock_process.assert_called_once_with("100x100", ["img1.jpg"], str(output_dir), 3.0, 0.5)
+    mock_process.assert_called_once_with(
+        "100x100", ["img1.jpg"], str(output_dir), 3.0, 0.5, True
+    )
     assert (output_dir / "groups.json").is_file()
+
 
 def test_register_commands():
     """Tests the register_commands method."""
@@ -157,5 +186,29 @@ def test_register_commands():
 
     plugin.register_commands(subparser)
 
-    subparser.add_parser.assert_called_once_with("slideshow", description=plugin.__doc__.strip())
+    subparser.add_parser.assert_called_once_with(
+        "slideshow", description=plugin.__doc__.strip()
+    )
     parser.set_defaults.assert_called_once_with(func=plugin.run)
+
+
+@pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Test doesn't work in Github Actions.")
+def test_realcase_slideshow(tmpdir):
+    outfile = tmpdir / "test_slide.mp4"
+    testdata = Path(__file__).parent / "test_data"
+    txtfile = testdata / "orderfiles.txt"
+    argv = [
+        str(txtfile),
+        "-d",
+        "4",
+        "-f",
+        "0.5",
+        "-o",
+        str(outfile),
+    ]
+    subparser = ArgumentParser().add_subparsers()
+    parser = w.create_parser(subparser)
+    args = parser.parse_args(argv)
+    args.func = None
+    w.slideshow_plugin.run(args)
+    assert outfile.exists()
